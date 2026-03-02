@@ -9,7 +9,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { newImageUrls, ...data } = body;
+    const { newImageUrls, deletedImageIds, ...data } = body;
 
     // Generate unique slug
     let slug = slugify(`${data.make}-${data.model}-${data.year}`);
@@ -39,6 +39,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(vehicle, { status: 201 });
   } catch (err) {
     console.error("Create vehicle error:", err);
-    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 });
+    const message = err instanceof Error ? err.message : "Erreur serveur";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
