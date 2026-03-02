@@ -194,7 +194,47 @@ async function fetchViaHtml(url: string): Promise<any | null> {
   return null;
 }
 
+// ─── Shared: download images to our blob storage ─────────────────────
+
+async function downloadImages(lbcImages: string[]): Promise<string[]> {
+  const storage = getStorageProvider();
+  const imageUrls: string[] = [];
+  const imagesToProcess = lbcImages.slice(0, 10);
+
+  await Promise.all(
+    imagesToProcess.map(async (imgUrl: string) => {
+      try {
+        const imgRes = await fetch(imgUrl, {
+          headers: {
+            "User-Agent":
+              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            Referer: "https://www.leboncoin.fr/",
+          },
+        });
+        if (!imgRes.ok) return;
+        const buffer = Buffer.from(await imgRes.arrayBuffer());
+        const ct = imgRes.headers.get("content-type") || "image/jpeg";
+        const ext = ct.includes("png")
+          ? "png"
+          : ct.includes("webp")
+            ? "webp"
+            : "jpg";
+        const filename = `lbc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+        const blobUrl = await storage.upload(buffer, filename, ct);
+        imageUrls.push(blobUrl);
+      } catch (e) {
+        console.error("Failed to download leboncoin image:", imgUrl, e);
+      }
+    })
+  );
+
+  return imageUrls;
+}
+
 // ─── POST /api/admin/import-leboncoin ────────────────────────────────
+// Supports two modes:
+// 1. { url: "https://leboncoin.fr/..." } — server fetches the ad
+// 2. { parsedData: {...}, imageUrls: [...] } — client already parsed, just download images
 
 export async function POST(request: NextRequest) {
   const session = await auth();
@@ -202,7 +242,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
 
   try {
-    const { url } = await request.json();
+    const body = await request.json();
+
+    // ── Mode 2: Client already parsed the data ─────────────────────
+    if (body.parsedData) {
+      const imageUrls = await downloadImages(body.imageUrls || []);
+      return NextResponse.json({ data: body.parsedData, imageUrls });
+    }
+
+    // ── Mode 1: Server fetches the URL ─────────────────────────────
+    const { url } = body;
 
     if (!url || !url.includes("leboncoin.fr")) {
       return NextResponse.json(
@@ -213,7 +262,6 @@ export async function POST(request: NextRequest) {
 
     const adId = extractAdId(url);
 
-    // ── Try multiple strategies ────────────────────────────────────
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let ad: any = null;
 
@@ -239,7 +287,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error:
-            "Impossible de récupérer l'annonce. Leboncoin bloque les requêtes automatiques. Utilisez l'import manuel ci-dessous.",
+            "Impossible de récupérer l'annonce. Leboncoin bloque les requêtes automatiques. Utilisez la méthode \"Coller les données\" comme alternative.",
         },
         { status: 422 }
       );
@@ -247,38 +295,7 @@ export async function POST(request: NextRequest) {
 
     // ── Parse ad data ──────────────────────────────────────────────
     const { vehicleData, lbcImages } = parseAd(ad);
-
-    // ── Download & re-upload images to our storage ─────────────────
-    const imageUrls: string[] = [];
-    const storage = getStorageProvider();
-    const imagesToProcess = lbcImages.slice(0, 10);
-
-    await Promise.all(
-      imagesToProcess.map(async (imgUrl: string) => {
-        try {
-          const imgRes = await fetch(imgUrl, {
-            headers: {
-              "User-Agent":
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-              Referer: "https://www.leboncoin.fr/",
-            },
-          });
-          if (!imgRes.ok) return;
-          const buffer = Buffer.from(await imgRes.arrayBuffer());
-          const ct = imgRes.headers.get("content-type") || "image/jpeg";
-          const ext = ct.includes("png")
-            ? "png"
-            : ct.includes("webp")
-              ? "webp"
-              : "jpg";
-          const filename = `lbc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-          const blobUrl = await storage.upload(buffer, filename, ct);
-          imageUrls.push(blobUrl);
-        } catch (e) {
-          console.error("Failed to download leboncoin image:", imgUrl, e);
-        }
-      })
-    );
+    const imageUrls = await downloadImages(lbcImages);
 
     return NextResponse.json({ data: vehicleData, imageUrls });
   } catch (err) {
