@@ -12,7 +12,7 @@ export async function PATCH(
   try {
     const { id } = await props.params;
     const body = await request.json();
-    const { newImageUrls, deletedImageIds, ...data } = body;
+    const { newImageUrls, deletedImageIds, imageOrder, ...data } = body;
 
     const vehicle = await prisma.vehicle.update({
       where: { id },
@@ -28,6 +28,18 @@ export async function PATCH(
       await prisma.vehicleImage.deleteMany({
         where: { id: { in: deletedImageIds }, vehicleId: id },
       });
+    }
+
+    // Reorder existing images
+    if (imageOrder?.length) {
+      await Promise.all(
+        imageOrder.map((item: { id: string; order: number }) =>
+          prisma.vehicleImage.update({
+            where: { id: item.id },
+            data: { order: item.order },
+          })
+        )
+      );
     }
 
     // Add new images

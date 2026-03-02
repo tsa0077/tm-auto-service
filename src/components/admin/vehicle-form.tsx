@@ -63,15 +63,30 @@ export default function VehicleForm({ vehicle, initialData, importedImageUrls = 
   const [error, setError] = useState("");
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
-  const [deletedImageIds, setDeletedImageIds] = useState<string[]>([]);
-  // Ordered imported images (initialized from props, user can reorder/remove)
+  // Ordered existing images (edit mode — keeps {id,url,alt}, user can reorder/remove)
+  const [orderedExistingImages, setOrderedExistingImages] = useState(vehicle?.images || []);
+  // Ordered imported images (import mode — keeps url strings, user can reorder/remove)
   const [orderedImportedUrls, setOrderedImportedUrls] = useState<string[]>(importedImageUrls);
   const isEdit = !!vehicle;
 
-  // Drag state for reordering
-  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  // Drag state for reordering (separate for each list)
+  const [dragExIdx, setDragExIdx] = useState<number | null>(null);
+  const [dragImpIdx, setDragImpIdx] = useState<number | null>(null);
 
-  function moveImage(from: number, to: number) {
+  function moveExistingImage(from: number, to: number) {
+    setOrderedExistingImages((prev) => {
+      const arr = [...prev];
+      const [item] = arr.splice(from, 1);
+      arr.splice(to, 0, item);
+      return arr;
+    });
+  }
+
+  function removeExistingImage(idx: number) {
+    setOrderedExistingImages((prev) => prev.filter((_, i) => i !== idx));
+  }
+
+  function moveImportedImage(from: number, to: number) {
     setOrderedImportedUrls((prev) => {
       const arr = [...prev];
       const [item] = arr.splice(from, 1);
@@ -139,6 +154,14 @@ export default function VehicleForm({ vehicle, initialData, importedImageUrls = 
       // Include imported images in their user-defined order
       imageUrls.push(...orderedImportedUrls);
 
+      // Compute deleted image IDs (original images removed by user)
+      const originalIds = (vehicle?.images || []).map((img) => img.id);
+      const keptIds = orderedExistingImages.map((img) => img.id);
+      const deletedImageIds = originalIds.filter((id) => !keptIds.includes(id));
+
+      // Compute image reorder (existing images in new order)
+      const imageOrder = orderedExistingImages.map((img, i) => ({ id: img.id, order: i }));
+
       const url = isEdit
         ? `/api/admin/vehicles/${vehicle.id}`
         : "/api/admin/vehicles";
@@ -147,7 +170,7 @@ export default function VehicleForm({ vehicle, initialData, importedImageUrls = 
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...data, newImageUrls: imageUrls, deletedImageIds }),
+        body: JSON.stringify({ ...data, newImageUrls: imageUrls, deletedImageIds, imageOrder }),
       });
 
       if (!res.ok) {
@@ -316,32 +339,88 @@ export default function VehicleForm({ vehicle, initialData, importedImageUrls = 
           <CardTitle>Images</CardTitle>
         </CardHeader>
         <CardContent>
-          {/* Existing images */}
-          {vehicle?.images && vehicle.images.length > 0 && (
+          {/* Existing images — reorderable */}
+          {orderedExistingImages.length > 0 && (
             <div className="mb-4">
-              <Label className="mb-2 block text-sm text-muted-foreground">Images actuelles</Label>
+              <Label className="mb-2 block text-sm text-muted-foreground">
+                Images actuelles ({orderedExistingImages.length}) — glissez ou utilisez les flèches pour réorganiser
+              </Label>
               <div className="flex flex-wrap gap-3">
-                {vehicle.images
-                  .filter((img) => !deletedImageIds.includes(img.id))
-                  .map((img) => (
-                    <div key={img.id} className="relative w-24 h-24 rounded-md overflow-hidden border group">
-                      <Image src={img.url} alt={img.alt} width={96} height={96} className="w-full h-full object-cover" unoptimized />
-                      <button
-                        type="button"
-                        onClick={() => setDeletedImageIds((prev) => [...prev, img.id])}
-                        className="absolute top-1 right-1 bg-red-600 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
-                        title="Supprimer"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
+                {orderedExistingImages.map((img, i) => {
+                  const deletedCount = (vehicle?.images || []).length - orderedExistingImages.length;
+                  return (
+                    <div
+                      key={img.id}
+                      draggable
+                      onDragStart={() => setDragExIdx(i)}
+                      onDragOver={(e) => { e.preventDefault(); }}
+                      onDrop={() => {
+                        if (dragExIdx !== null && dragExIdx !== i) moveExistingImage(dragExIdx, i);
+                        setDragExIdx(null);
+                      }}
+                      onDragEnd={() => setDragExIdx(null)}
+                      className={`relative w-28 rounded-md overflow-hidden border-2 transition-all cursor-grab active:cursor-grabbing ${
+                        dragExIdx === i ? "border-blue-500 opacity-50 scale-95" : "border-gray-300"
+                      } ${i === 0 ? "ring-2 ring-blue-500" : ""}`}
+                    >
+                      {/* Position badge */}
+                      <div className="absolute top-1 left-1 z-10 bg-black/70 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center">
+                        {i + 1}
+                      </div>
+                      {i === 0 && (
+                        <div className="absolute top-1 left-8 z-10 bg-blue-600 text-white text-[10px] font-medium px-1.5 py-0.5 rounded">
+                          Principale
+                        </div>
+                      )}
+                      {/* Grip icon */}
+                      <div className="absolute top-1/2 -translate-y-1/2 left-0 z-10 bg-black/40 text-white rounded-r p-0.5">
+                        <GripVertical className="h-3 w-3" />
+                      </div>
+                      {/* Image */}
+                      <div className="w-28 h-24">
+                        <Image src={img.url} alt={img.alt} width={112} height={96} className="w-full h-full object-cover" unoptimized />
+                      </div>
+                      {/* Controls bar */}
+                      <div className="flex items-center justify-between bg-gray-100 px-1 py-0.5">
+                        <button
+                          type="button"
+                          onClick={() => i > 0 && moveExistingImage(i, i - 1)}
+                          disabled={i === 0}
+                          className="p-0.5 rounded hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                          title="Déplacer à gauche"
+                        >
+                          <ChevronLeft className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => removeExistingImage(i)}
+                          className="p-0.5 rounded hover:bg-red-100 text-red-600"
+                          title="Supprimer"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => i < orderedExistingImages.length - 1 && moveExistingImage(i, i + 1)}
+                          disabled={i === orderedExistingImages.length - 1}
+                          className="p-0.5 rounded hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                          title="Déplacer à droite"
+                        >
+                          <ChevronRight className="h-4 w-4" />
+                        </button>
+                      </div>
                     </div>
-                  ))}
+                  );
+                })}
               </div>
-              {deletedImageIds.length > 0 && (
-                <p className="text-xs text-red-600 mt-2">
-                  {deletedImageIds.length} image{deletedImageIds.length > 1 ? "s" : ""} sera{deletedImageIds.length > 1 ? "ont" : ""} supprimée{deletedImageIds.length > 1 ? "s" : ""}
-                </p>
-              )}
+              {(() => {
+                const deletedCount = (vehicle?.images || []).length - orderedExistingImages.length;
+                return deletedCount > 0 ? (
+                  <p className="text-xs text-red-600 mt-2">
+                    {deletedCount} image{deletedCount > 1 ? "s" : ""} sera{deletedCount > 1 ? "ont" : ""} supprimée{deletedCount > 1 ? "s" : ""}
+                  </p>
+                ) : null;
+              })()}
             </div>
           )}
 
@@ -356,15 +435,15 @@ export default function VehicleForm({ vehicle, initialData, importedImageUrls = 
                   <div
                     key={imgUrl}
                     draggable
-                    onDragStart={() => setDragIdx(i)}
+                    onDragStart={() => setDragImpIdx(i)}
                     onDragOver={(e) => { e.preventDefault(); }}
                     onDrop={() => {
-                      if (dragIdx !== null && dragIdx !== i) moveImage(dragIdx, i);
-                      setDragIdx(null);
+                      if (dragImpIdx !== null && dragImpIdx !== i) moveImportedImage(dragImpIdx, i);
+                      setDragImpIdx(null);
                     }}
-                    onDragEnd={() => setDragIdx(null)}
+                    onDragEnd={() => setDragImpIdx(null)}
                     className={`relative w-28 rounded-md overflow-hidden border-2 transition-all cursor-grab active:cursor-grabbing ${
-                      dragIdx === i ? "border-blue-500 opacity-50 scale-95" : "border-blue-300"
+                      dragImpIdx === i ? "border-blue-500 opacity-50 scale-95" : "border-blue-300"
                     } ${i === 0 ? "ring-2 ring-blue-500" : ""}`}
                   >
                     {/* Position badge */}
@@ -388,7 +467,7 @@ export default function VehicleForm({ vehicle, initialData, importedImageUrls = 
                     <div className="flex items-center justify-between bg-gray-100 px-1 py-0.5">
                       <button
                         type="button"
-                        onClick={() => i > 0 && moveImage(i, i - 1)}
+                        onClick={() => i > 0 && moveImportedImage(i, i - 1)}
                         disabled={i === 0}
                         className="p-0.5 rounded hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed"
                         title="Déplacer à gauche"
@@ -405,7 +484,7 @@ export default function VehicleForm({ vehicle, initialData, importedImageUrls = 
                       </button>
                       <button
                         type="button"
-                        onClick={() => i < orderedImportedUrls.length - 1 && moveImage(i, i + 1)}
+                        onClick={() => i < orderedImportedUrls.length - 1 && moveImportedImage(i, i + 1)}
                         disabled={i === orderedImportedUrls.length - 1}
                         className="p-0.5 rounded hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed"
                         title="Déplacer à droite"
