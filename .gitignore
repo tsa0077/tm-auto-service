@@ -49,14 +49,8 @@ next-env.d.ts
 prisma/dev.db
 prisma/dev.db-journal
 
-# uploaded files (local dev only)
-public/uploads/*
-!public/uploads/.gitkeep
-
 # large assets not needed in repo
 car-logos-dataset-*
-auto-repair-team.png
-TM AUTO LOGO.png
 
 .vercel
 .env*.local
