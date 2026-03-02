@@ -1,0 +1,189 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────
+
+enum VehicleType {
+  SALE
+  RENT
+}
+
+enum VehicleStatus {
+  AVAILABLE
+  RESERVED
+  SOLD
+  RENTED
+  MAINTENANCE
+}
+
+enum FuelType {
+  ESSENCE
+  DIESEL
+  HYBRIDE
+  ELECTRIQUE
+  GPL
+}
+
+enum TransmissionType {
+  MANUELLE
+  AUTOMATIQUE
+}
+
+enum LeadSource {
+  CONTACT
+  VEHICLE
+  REPRISE
+  LOCATION
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  IN_PROGRESS
+  CONVERTED
+  LOST
+}
+
+enum ChatProvider {
+  TAWK
+  CRISP
+  TIDIO
+}
+
+// ─── Models ──────────────────────────────────────────────────────────
+
+model Settings {
+  id String @id @default("singleton")
+
+  // Tracking
+  trackingEnabled      Boolean @default(false)
+  metaPixelId          String  @default("")
+  ga4MeasurementId     String  @default("")
+  gtmId                String  @default("")
+  cookieConsentEnabled Boolean @default(true)
+
+  // WhatsApp
+  whatsappEnabled  Boolean @default(false)
+  whatsappNumber   String  @default("")
+  whatsappMessage  String  @default("Bonjour, je vous contacte depuis votre site web.")
+
+  // Live Chat
+  chatEnabled  Boolean       @default(false)
+  chatProvider ChatProvider  @default(TAWK)
+  chatScript   String        @default("")
+
+  // Business Info
+  businessName         String @default("TM Auto Service")
+  businessPhone        String @default("")
+  businessEmail        String @default("")
+  businessAddress      String @default("")
+  businessCity         String @default("")
+  businessZipCode      String @default("")
+  businessCountry      String @default("France")
+  businessHours        String @default("")
+  businessDescription  String @default("")
+  googleMapsUrl        String @default("")
+  socialFacebook       String @default("")
+  socialInstagram      String @default("")
+  socialGoogle         String @default("")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AdminUser {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Vehicle {
+  id          String          @id @default(cuid())
+  type        VehicleType     @default(SALE)
+  status      VehicleStatus   @default(AVAILABLE)
+  slug        String          @unique
+  title       String
+  make        String
+  model       String
+  year        Int
+  price       Float?
+  priceLabel  String?
+  mileage     Int?
+  fuel        FuelType        @default(DIESEL)
+  transmission TransmissionType @default(MANUELLE)
+  power       String?
+  color       String?
+  doors       Int?
+  seats       Int?
+  description String?
+  features    String  @default("[]")
+  options     String  @default("[]")
+
+  // Rental
+  dailyRate   Float?
+  weeklyRate  Float?
+  monthlyRate Float?
+  deposit     Float?
+
+  images      VehicleImage[]
+  leads       Lead[]
+
+  featured    Boolean  @default(false)
+  publishedAt DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([type, status])
+  @@index([make])
+  @@index([slug])
+}
+
+model VehicleImage {
+  id        String  @id @default(cuid())
+  url       String
+  alt       String  @default("")
+  order     Int     @default(0)
+  vehicleId String
+  vehicle   Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@index([vehicleId])
+}
+
+model Lead {
+  id        String     @id @default(cuid())
+  source    LeadSource
+  status    LeadStatus @default(NEW)
+
+  firstName String
+  lastName  String
+  email     String
+  phone     String
+  message   String?
+
+  // Vehicle reference (optional)
+  vehicleId String?
+  vehicle   Vehicle?   @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+
+  // Reprise specific
+  repriseMarque  String?
+  repriseModele  String?
+  repriseAnnee   Int?
+  repriseKm      Int?
+  repriseDetails String?
+
+  metadata   String?
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([source, status])
+  @@index([createdAt])
+}

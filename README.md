@@ -1,36 +1,124 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# TM Auto Service 🚗
 
-## Getting Started
+Site vitrine + back-office pour **TM Auto Service** — garage automobile multimarque.
 
-First, run the development server:
+## Stack technique
+
+- **Next.js 16** (App Router, TypeScript)
+- **TailwindCSS v4** + composants shadcn/ui
+- **Prisma** + PostgreSQL
+- **NextAuth v5** (authentification admin)
+- **Zod** (validation)
+- **Lucide React** (icônes)
+
+## Démarrage rapide
+
+### 1. Variables d'environnement
+
+```bash
+cp .env.example .env
+```
+
+Modifier `.env` avec vos informations (BDD PostgreSQL, AUTH_SECRET…).
+
+### 2. Installer les dépendances
+
+```bash
+npm install
+```
+
+### 3. Initialiser la base de données
+
+```bash
+npx prisma db push
+npm run db:seed
+```
+
+### 4. Lancer le serveur
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Accédez à :
+- **Site public** : [http://localhost:3000](http://localhost:3000)
+- **Admin** : [http://localhost:3000/admin](http://localhost:3000/admin)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Identifiants admin par défaut
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Email | Mot de passe |
+|---|---|
+| `admin@tm-auto-service.fr` | `admin123` |
 
-## Learn More
+## Scripts disponibles
 
-To learn more about Next.js, take a look at the following resources:
+| Commande | Description |
+|---|---|
+| `npm run dev` | Serveur de développement |
+| `npm run build` | Build production |
+| `npm start` | Serveur production |
+| `npm run db:push` | Synchroniser le schéma Prisma |
+| `npm run db:seed` | Peupler la BDD avec des données de test |
+| `npm run db:studio` | Ouvrir Prisma Studio (GUI) |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Architecture
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```
+src/
+├── app/
+│   ├── (public)/          # Pages publiques
+│   │   ├── page.tsx        # Accueil
+│   │   ├── services/       # Services + détail
+│   │   ├── vehicules/      # Vente véhicules + détail
+│   │   ├── location/       # Location + détail
+│   │   ├── reprise/        # Reprise de véhicule
+│   │   ├── contact/        # Formulaire de contact
+│   │   ├── a-propos/       # À propos
+│   │   ├── mentions-legales/
+│   │   ├── confidentialite/
+│   │   └── cookies/
+│   ├── admin/              # Back-office (protégé)
+│   │   ├── page.tsx        # Dashboard
+│   │   ├── vehicules/      # CRUD véhicules
+│   │   ├── leads/          # Gestion des leads
+│   │   └── settings/       # Paramètres
+│   └── api/                # Route handlers
+├── components/
+│   ├── ui/                 # Composants shadcn/ui
+│   ├── layout/             # Header, Footer, WhatsApp…
+│   ├── forms/              # Formulaires
+│   ├── vehicles/           # Composants véhicules
+│   └── admin/              # Composants admin
+├── content/                # Contenu statique FR
+└── lib/                    # Utilitaires (db, auth, seo…)
+```
 
-## Deploy on Vercel
+## Fonctionnalités
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### Site public
+- Design premium noir / rouge / blanc, responsive mobile-first
+- 13 pages avec SEO complet (OpenGraph, schema.org JSON-LD, sitemap)
+- Catalogue véhicules avec filtres (marque, prix, année, carburant…)
+- Catalogue location avec tarifs journalier/hebdo/mensuel
+- Formulaire de reprise véhicule
+- Bouton WhatsApp flottant + Live chat intégré
+- Tracking (Facebook Pixel, GA4, GTM) avec consentement cookies RGPD
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Back-office admin
+- Dashboard avec KPIs
+- CRUD véhicules complet avec upload d'images
+- Gestion des leads avec statuts et filtres
+- Paramètres : tracking, WhatsApp, live chat, informations entreprise
+- Authentification sécurisée (NextAuth + bcrypt)
+
+## TODO — Production
+
+- [ ] Configurer SMTP dans `src/lib/email.ts`
+- [ ] Migrer le stockage d'images vers Supabase ou S3
+- [ ] Compléter les mentions légales
+- [ ] Changer le mot de passe admin par défaut
+- [ ] Générer un vrai AUTH_SECRET : `openssl rand -base64 32`
+
+## Licence
+
+Privé — Tous droits réservés.
