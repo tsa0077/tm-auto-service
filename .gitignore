@@ -57,3 +57,6 @@ public/uploads/*
 car-logos-dataset-*
 auto-repair-team.png
 TM AUTO LOGO.png
+
+.vercel
+.env*.local
