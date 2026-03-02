@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import Image from "next/image";
-import { Loader2, Save, X } from "lucide-react";
+import { Loader2, Save, X, GripVertical, ChevronLeft, ChevronRight } from "lucide-react";
 import { MAKES, FUEL_LABELS, TRANSMISSION_LABELS } from "@/content/services";
 
 import { parseJsonArray } from "@/lib/utils";
@@ -64,8 +64,25 @@ export default function VehicleForm({ vehicle, initialData, importedImageUrls = 
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const [deletedImageIds, setDeletedImageIds] = useState<string[]>([]);
-  const [removedImportedUrls, setRemovedImportedUrls] = useState<string[]>([]);
+  // Ordered imported images (initialized from props, user can reorder/remove)
+  const [orderedImportedUrls, setOrderedImportedUrls] = useState<string[]>(importedImageUrls);
   const isEdit = !!vehicle;
+
+  // Drag state for reordering
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+
+  function moveImage(from: number, to: number) {
+    setOrderedImportedUrls((prev) => {
+      const arr = [...prev];
+      const [item] = arr.splice(from, 1);
+      arr.splice(to, 0, item);
+      return arr;
+    });
+  }
+
+  function removeImportedImage(idx: number) {
+    setOrderedImportedUrls((prev) => prev.filter((_, i) => i !== idx));
+  }
 
   // Merge: vehicle prop (edit mode) > initialData (import mode) > defaults
   const dv = vehicle || initialData;
@@ -119,11 +136,8 @@ export default function VehicleForm({ vehicle, initialData, importedImageUrls = 
         }
       }
 
-      // Include imported images (already uploaded to storage)
-      const activeImportedUrls = importedImageUrls.filter(
-        (u) => !removedImportedUrls.includes(u)
-      );
-      imageUrls.push(...activeImportedUrls);
+      // Include imported images in their user-defined order
+      imageUrls.push(...orderedImportedUrls);
 
       const url = isEdit
         ? `/api/admin/vehicles/${vehicle.id}`
@@ -331,28 +345,76 @@ export default function VehicleForm({ vehicle, initialData, importedImageUrls = 
             </div>
           )}
 
-          {/* Imported images (from Leboncoin) */}
-          {importedImageUrls.length > 0 && (
+          {/* Imported images (from Leboncoin) — reorderable */}
+          {orderedImportedUrls.length > 0 && (
             <div className="mb-4">
               <Label className="mb-2 block text-sm text-muted-foreground">
-                Images importées ({importedImageUrls.filter((u) => !removedImportedUrls.includes(u)).length})
+                Images importées ({orderedImportedUrls.length}) — glissez ou utilisez les flèches pour réorganiser
               </Label>
               <div className="flex flex-wrap gap-3">
-                {importedImageUrls
-                  .filter((u) => !removedImportedUrls.includes(u))
-                  .map((imgUrl, i) => (
-                    <div key={imgUrl} className="relative w-24 h-24 rounded-md overflow-hidden border border-blue-300 group">
-                      <Image src={imgUrl} alt={`Import ${i + 1}`} width={96} height={96} className="w-full h-full object-cover" unoptimized />
+                {orderedImportedUrls.map((imgUrl, i) => (
+                  <div
+                    key={imgUrl}
+                    draggable
+                    onDragStart={() => setDragIdx(i)}
+                    onDragOver={(e) => { e.preventDefault(); }}
+                    onDrop={() => {
+                      if (dragIdx !== null && dragIdx !== i) moveImage(dragIdx, i);
+                      setDragIdx(null);
+                    }}
+                    onDragEnd={() => setDragIdx(null)}
+                    className={`relative w-28 rounded-md overflow-hidden border-2 transition-all cursor-grab active:cursor-grabbing ${
+                      dragIdx === i ? "border-blue-500 opacity-50 scale-95" : "border-blue-300"
+                    } ${i === 0 ? "ring-2 ring-blue-500" : ""}`}
+                  >
+                    {/* Position badge */}
+                    <div className="absolute top-1 left-1 z-10 bg-black/70 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center">
+                      {i + 1}
+                    </div>
+                    {i === 0 && (
+                      <div className="absolute top-1 left-8 z-10 bg-blue-600 text-white text-[10px] font-medium px-1.5 py-0.5 rounded">
+                        Principale
+                      </div>
+                    )}
+                    {/* Grip icon */}
+                    <div className="absolute top-1/2 -translate-y-1/2 left-0 z-10 bg-black/40 text-white rounded-r p-0.5">
+                      <GripVertical className="h-3 w-3" />
+                    </div>
+                    {/* Image */}
+                    <div className="w-28 h-24">
+                      <Image src={imgUrl} alt={`Import ${i + 1}`} width={112} height={96} className="w-full h-full object-cover" unoptimized />
+                    </div>
+                    {/* Controls bar */}
+                    <div className="flex items-center justify-between bg-gray-100 px-1 py-0.5">
                       <button
                         type="button"
-                        onClick={() => setRemovedImportedUrls((prev) => [...prev, imgUrl])}
-                        className="absolute top-1 right-1 bg-red-600 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={() => i > 0 && moveImage(i, i - 1)}
+                        disabled={i === 0}
+                        className="p-0.5 rounded hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                        title="Déplacer à gauche"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => removeImportedImage(i)}
+                        className="p-0.5 rounded hover:bg-red-100 text-red-600"
                         title="Retirer"
                       >
-                        <X className="h-3 w-3" />
+                        <X className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => i < orderedImportedUrls.length - 1 && moveImage(i, i + 1)}
+                        disabled={i === orderedImportedUrls.length - 1}
+                        className="p-0.5 rounded hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                        title="Déplacer à droite"
+                      >
+                        <ChevronRight className="h-4 w-4" />
                       </button>
                     </div>
-                  ))}
+                  </div>
+                ))}
               </div>
             </div>
           )}
