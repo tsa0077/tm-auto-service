@@ -9,7 +9,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { newImageUrls, deletedImageIds, ...data } = body;
+    const { newImageUrls, deletedImageIds, imageOrder, ...data } = body;
 
     // Generate unique slug
     let slug = slugify(`${data.make}-${data.model}-${data.year}`);
