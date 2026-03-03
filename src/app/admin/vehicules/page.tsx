@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Plus, Edit } from "lucide-react";
 import { formatPrice } from "@/lib/utils";
 import { STATUS_LABELS, FUEL_LABELS } from "@/content/services";
+import DeleteVehicleButton from "@/components/admin/delete-vehicle-button";
 
 async function getVehicles() {
   try {
@@ -81,12 +82,15 @@ export default async function AdminVehiclesPage() {
                     {formatPrice(v.price)} • {v._count.leads} lead{v._count.leads !== 1 ? "s" : ""}
                   </p>
                 </div>
-                <Button variant="outline" size="sm" asChild>
-                  <Link href={`/admin/vehicules/${v.id}`}>
-                    <Edit className="h-4 w-4 mr-1" />
-                    Modifier
-                  </Link>
-                </Button>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Button variant="outline" size="sm" asChild>
+                    <Link href={`/admin/vehicules/${v.id}`}>
+                      <Edit className="h-4 w-4 mr-1" />
+                      Modifier
+                    </Link>
+                  </Button>
+                  <DeleteVehicleButton vehicleId={v.id} vehicleTitle={v.title} />
+                </div>
               </CardContent>
             </Card>
           ))}
