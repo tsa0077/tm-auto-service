@@ -22,12 +22,12 @@ export default function VehicleGallery({ images }: VehicleGalleryProps) {
   return (
     <div className="space-y-3">
       {/* Main image */}
-      <div className="relative aspect-[4/3] overflow-hidden rounded-lg bg-neutral-100">
+      <div className="relative aspect-[4/3] overflow-hidden rounded-lg bg-neutral-900">
         <Image
           src={images[current].url}
           alt={images[current].alt || "Véhicule"}
           fill
-          className="object-cover"
+          className="object-contain"
           sizes="(max-width: 768px) 100vw, 60vw"
           priority
           unoptimized
