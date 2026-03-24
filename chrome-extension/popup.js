@@ -24,16 +24,104 @@ extractBtn.addEventListener("click", async () => {
       return;
     }
 
-    // Inject script to extract __NEXT_DATA__
+    // Inject script to extract ad data from the page
     const results = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       func: () => {
         try {
+          // Strategy 1: __NEXT_DATA__ (classic Leboncoin)
           const nd = window.__NEXT_DATA__;
-          if (!nd) return { error: "Pas de données Next.js trouvées sur cette page." };
-          const ad = nd.props?.pageProps?.ad;
-          if (!ad) return { error: "Pas d'annonce trouvée. Êtes-vous sur la page d'une annonce ?" };
-          return { ad: JSON.stringify(ad) };
+          if (nd) {
+            // Try common paths
+            const ad = nd.props?.pageProps?.ad
+              || nd.props?.pageProps?.adContext?.ad
+              || nd.props?.pageProps?.classified
+              || nd.props?.pageProps?.data?.ad
+              || nd.props?.pageProps?.initialProps?.ad;
+            if (ad) return { ad: JSON.stringify(ad) };
+          }
+
+          // Strategy 2: Look for ad data in __remixContext (if LBC migrated)
+          if (window.__remixContext) {
+            const loaderData = window.__remixContext?.state?.loaderData;
+            if (loaderData) {
+              for (const key of Object.keys(loaderData)) {
+                const d = loaderData[key];
+                if (d?.ad) return { ad: JSON.stringify(d.ad) };
+                if (d?.classified) return { ad: JSON.stringify(d.classified) };
+              }
+            }
+          }
+
+          // Strategy 3: Search for JSON-LD structured data in the page
+          const ldScripts = document.querySelectorAll('script[type="application/ld+json"]');
+          for (const s of ldScripts) {
+            try {
+              const ld = JSON.parse(s.textContent);
+              if (ld["@type"] === "Car" || ld["@type"] === "Product" || ld["@type"] === "Vehicle") {
+                return { ad: s.textContent, isLd: true };
+              }
+            } catch {}
+          }
+
+          // Strategy 4: Extract from window.__INITIAL_STATE__ or similar globals
+          for (const key of ["__INITIAL_STATE__", "__APOLLO_STATE__", "__RELAY_STORE__"]) {
+            if (window[key]) {
+              const state = JSON.stringify(window[key]);
+              if (state.includes('"subject"') && state.includes('"attributes"')) {
+                return { ad: state, isRaw: true };
+              }
+            }
+          }
+
+          // Strategy 5: Scrape directly from the DOM
+          const title = document.querySelector('[data-qa-id="adview_title"]')?.textContent
+            || document.querySelector('h1')?.textContent;
+          const priceEl = document.querySelector('[data-qa-id="adview_price"]')
+            || document.querySelector('[class*="Price"]');
+          const price = priceEl?.textContent?.replace(/[^\d]/g, "");
+          const descEl = document.querySelector('[data-qa-id="adview_description_container"]')
+            || document.querySelector('[class*="Description"]');
+          const images = [...document.querySelectorAll('[data-qa-id="adview_spotlight_container"] img, [class*="Gallery"] img, [class*="Carousel"] img')]
+            .map(img => img.src || img.dataset?.src)
+            .filter(Boolean)
+            .filter(u => u.startsWith("http"));
+
+          if (title && (price || images.length > 0)) {
+            // Build a minimal ad object from DOM
+            const adFromDom = {
+              subject: title.trim(),
+              body: descEl?.textContent?.trim() || "",
+              price: price ? [parseInt(price)] : [],
+              images: { urls_large: images },
+              attributes: [],
+              _fromDom: true,
+            };
+
+            // Try to extract attributes from the specs section
+            const specItems = document.querySelectorAll('[data-qa-id^="criteria_item_"]');
+            specItems.forEach(item => {
+              const label = item.querySelector('[class*="Label"], [class*="label"], dt')?.textContent?.trim().toLowerCase() || "";
+              const value = item.querySelector('[class*="Value"], [class*="value"], dd')?.textContent?.trim() || "";
+              const keyMap = {
+                "marque": "brand", "modèle": "model", "année-modèle": "regdate",
+                "kilométrage": "mileage", "carburant": "fuel", "boîte de vitesse": "gearbox",
+                "couleur": "vehicle_color", "nombre de portes": "doors",
+                "nombre de places": "seats", "puissance fiscale": "horse_power_din",
+              };
+              for (const [fr, en] of Object.entries(keyMap)) {
+                if (label.includes(fr)) {
+                  adFromDom.attributes.push({ key: en, value: value.replace(/[^\d\w]/g, "") || value });
+                }
+              }
+            });
+
+            return { ad: JSON.stringify(adFromDom) };
+          }
+
+          // Nothing found - return debug info
+          const keys = nd ? Object.keys(nd.props?.pageProps || {}).join(", ") : "no __NEXT_DATA__";
+          return { error: "Pas d'annonce trouvée. Données disponibles: [" + keys + "]. Êtes-vous sur la page d'une annonce ?" };
         } catch (e) {
           return { error: "Erreur: " + e.message };
         }
