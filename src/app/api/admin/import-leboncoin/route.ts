@@ -119,59 +119,85 @@ function parseAd(ad: any) {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function fetchViaApi(adId: string): Promise<any | null> {
+  // Try the main finder API
   const apiUrl = `https://api.leboncoin.fr/finder/classified/${adId}`;
+  try {
+    const res = await fetch(apiUrl, {
+      headers: {
+        Accept: "application/json",
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+        "Accept-Language": "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Accept-Encoding": "gzip, deflate, br",
+        Origin: "https://www.leboncoin.fr",
+        Referer: "https://www.leboncoin.fr/",
+        "api_key": "ba0c2dad52b3ec",
+        "sec-ch-ua": '"Chromium";v="131", "Not_A Brand";v="24"',
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": '"Windows"',
+        "Sec-Fetch-Dest": "empty",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Site": "same-site",
+      },
+    });
+    if (res.ok) return await res.json();
+  } catch {
+    // fall through
+  }
 
-  const res = await fetch(apiUrl, {
-    headers: {
-      Accept: "application/json",
-      "User-Agent":
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-      "Accept-Language": "fr-FR,fr;q=0.9",
-      Origin: "https://www.leboncoin.fr",
-      Referer: "https://www.leboncoin.fr/",
-      "api_key": "ba0c2dad52b3ec",
-    },
-  });
+  // Try the SMA (mobile) API endpoint
+  try {
+    const smaUrl = `https://api.leboncoin.fr/api/adfinder/v1/classified/${adId}`;
+    const res = await fetch(smaUrl, {
+      headers: {
+        Accept: "application/json",
+        "User-Agent":
+          "LBC;Android;16;phone;9.2.0;5ab6d7",
+        "Accept-Language": "fr-FR",
+        "api_key": "ba0c2dad52b3ec",
+      },
+    });
+    if (res.ok) return await res.json();
+  } catch {
+    // fall through
+  }
 
-  if (!res.ok) return null;
-  return res.json();
+  return null;
 }
 
 // ─── Strategy 2: HTML scraping with __NEXT_DATA__ ────────────────────
 
+const BROWSER_HEADERS = {
+  "User-Agent":
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+  Accept:
+    "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+  "Accept-Language": "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7",
+  "Accept-Encoding": "gzip, deflate, br",
+  "Cache-Control": "no-cache",
+  Pragma: "no-cache",
+  "Sec-Fetch-Dest": "document",
+  "Sec-Fetch-Mode": "navigate",
+  "Sec-Fetch-Site": "none",
+  "Sec-Fetch-User": "?1",
+  "Upgrade-Insecure-Requests": "1",
+  "sec-ch-ua": '"Chromium";v="131", "Not_A Brand";v="24"',
+  "sec-ch-ua-mobile": "?0",
+  "sec-ch-ua-platform": '"Windows"',
+};
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function fetchViaHtml(url: string): Promise<any | null> {
-  const res = await fetch(url, {
-    headers: {
-      "User-Agent":
-        "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
-      Accept:
-        "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-      "Accept-Language": "fr-FR,fr;q=0.9",
-      "Accept-Encoding": "gzip, deflate, br",
-      "Cache-Control": "no-cache",
-      Pragma: "no-cache",
-      "Sec-Fetch-Dest": "document",
-      "Sec-Fetch-Mode": "navigate",
-      "Sec-Fetch-Site": "none",
-      "Sec-Fetch-User": "?1",
-      "Upgrade-Insecure-Requests": "1",
-    },
-    redirect: "follow",
-  });
-
-  if (!res.ok) return null;
-
-  const html = await res.text();
-
+function extractAdFromHtml(html: string): any | null {
   // Try __NEXT_DATA__
   const ndMatch = html.match(
     /<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/
   );
   if (ndMatch) {
-    const nextData = JSON.parse(ndMatch[1]);
-    const ad = nextData?.props?.pageProps?.ad;
-    if (ad) return ad;
+    try {
+      const nextData = JSON.parse(ndMatch[1]);
+      const ad = nextData?.props?.pageProps?.ad;
+      if (ad) return ad;
+    } catch { /* ignore parse error */ }
   }
 
   // Try JSON-LD
@@ -179,19 +205,59 @@ async function fetchViaHtml(url: string): Promise<any | null> {
     /<script type="application\/ld\+json">([\s\S]*?)<\/script>/
   );
   if (ldMatch) {
-    const ld = JSON.parse(ldMatch[1]);
-    if (ld["@type"] === "Product" || ld["@type"] === "Car") {
-      return {
-        subject: ld.name,
-        body: ld.description,
-        price: ld.offers?.price ? [Number(ld.offers.price)] : [],
-        images: { urls_large: ld.image ? (Array.isArray(ld.image) ? ld.image : [ld.image]) : [] },
-        attributes: [],
-      };
-    }
+    try {
+      const ld = JSON.parse(ldMatch[1]);
+      if (ld["@type"] === "Product" || ld["@type"] === "Car") {
+        return {
+          subject: ld.name,
+          body: ld.description,
+          price: ld.offers?.price ? [Number(ld.offers.price)] : [],
+          images: { urls_large: ld.image ? (Array.isArray(ld.image) ? ld.image : [ld.image]) : [] },
+          attributes: [],
+        };
+      }
+    } catch { /* ignore parse error */ }
   }
 
   return null;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function fetchViaHtml(url: string): Promise<any | null> {
+  try {
+    const res = await fetch(url, {
+      headers: BROWSER_HEADERS,
+      redirect: "follow",
+    });
+    if (!res.ok) return null;
+    const html = await res.text();
+    return extractAdFromHtml(html);
+  } catch {
+    return null;
+  }
+}
+
+// ─── Strategy 3: Google webcache fallback ────────────────────────────
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function fetchViaGoogleCache(url: string): Promise<any | null> {
+  try {
+    const cacheUrl = `https://webcache.googleusercontent.com/search?q=cache:${encodeURIComponent(url)}&strip=0`;
+    const res = await fetch(cacheUrl, {
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "fr-FR,fr;q=0.9",
+      },
+      redirect: "follow",
+    });
+    if (!res.ok) return null;
+    const html = await res.text();
+    return extractAdFromHtml(html);
+  } catch {
+    return null;
+  }
 }
 
 // ─── Shared: download images to our blob storage ─────────────────────
@@ -265,7 +331,7 @@ export async function POST(request: NextRequest) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let ad: any = null;
 
-    // Strategy 1: Direct API call (fastest, no Cloudflare)
+    // Strategy 1: Direct API calls (fastest)
     if (adId) {
       try {
         ad = await fetchViaApi(adId);
@@ -278,6 +344,15 @@ export async function POST(request: NextRequest) {
     if (!ad) {
       try {
         ad = await fetchViaHtml(url);
+      } catch {
+        // Silently fall through
+      }
+    }
+
+    // Strategy 3: Google webcache fallback
+    if (!ad) {
+      try {
+        ad = await fetchViaGoogleCache(url);
       } catch {
         // Silently fall through
       }
