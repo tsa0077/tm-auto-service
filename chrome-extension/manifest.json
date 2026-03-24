@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "TM AUTO - Import Leboncoin",
+  "description": "Importez les annonces Leboncoin en un clic vers TM AUTO SERVICE",
+  "version": "1.0",
+  "permissions": ["activeTab", "scripting"],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "48": "icon48.png",
+      "128": "icon128.png"
+    }
+  },
+  "icons": {
+    "48": "icon48.png",
+    "128": "icon128.png"
+  }
+}

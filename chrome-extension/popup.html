@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { width: 320px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 16px; background: #fff; }
+    .header { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid #e5e7eb; }
+    .header h1 { font-size: 15px; font-weight: 700; color: #111; }
+    .header span { font-size: 11px; color: #ef4444; font-weight: 600; }
+    .status { padding: 10px 12px; border-radius: 8px; font-size: 13px; margin-bottom: 12px; line-height: 1.4; }
+    .status.info { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+    .status.success { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
+    .status.error { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+    .status.warning { background: #fffbeb; color: #92400e; border: 1px solid #fde68a; }
+    .btn { width: 100%; padding: 10px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.15s; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-primary { background: #ef4444; color: #fff; }
+    .btn-primary:hover:not(:disabled) { background: #dc2626; }
+    .btn-secondary { background: #f3f4f6; color: #374151; margin-top: 8px; }
+    .btn-secondary:hover:not(:disabled) { background: #e5e7eb; }
+    .spinner { width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: spin 0.6s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .preview { margin-top: 12px; padding: 10px; background: #f9fafb; border-radius: 8px; border: 1px solid #e5e7eb; }
+    .preview h3 { font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+    .preview p { font-size: 12px; color: #6b7280; line-height: 1.4; }
+    .preview .title { color: #111; font-weight: 500; }
+    .footer { margin-top: 12px; text-align: center; font-size: 11px; color: #9ca3af; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <h1>TM AUTO <span>SERVICE</span></h1>
+    </div>
+  </div>
+
+  <div id="status" class="status info">
+    Ouvrez une annonce Leboncoin puis cliquez sur le bouton ci-dessous.
+  </div>
+
+  <button id="extractBtn" class="btn btn-primary">
+    📋 Extraire l'annonce
+  </button>
+
+  <button id="openAdmin" class="btn btn-secondary" style="display:none;">
+    🚗 Ouvrir le dashboard TM AUTO
+  </button>
+
+  <div id="preview" class="preview" style="display:none;">
+    <h3>Aperçu :</h3>
+    <p id="previewText"></p>
+  </div>
+
+  <div class="footer">tm-auto-service.com</div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
