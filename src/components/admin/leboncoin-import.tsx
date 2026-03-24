@@ -122,30 +122,46 @@ export default function LeboncoinImport({ onImport }: LeboncoinImportProps) {
       let adJson;
       const trimmed = pastedJson.trim();
 
+      // First, try JSON parse
+      let parsed = null;
       try {
-        const parsed = JSON.parse(trimmed);
-        // Check if it's the full __NEXT_DATA__ or just the ad object
-        if (parsed?.props?.pageProps?.ad) {
-          adJson = parsed.props.pageProps.ad;
-        } else if (parsed?.subject || parsed?.attributes) {
-          adJson = parsed;
-        } else {
-          throw new Error("Format non reconnu");
-        }
+        parsed = JSON.parse(trimmed);
       } catch {
-        // Maybe it's HTML — try extracting __NEXT_DATA__
+        // Not JSON — try extracting from HTML
         const match = trimmed.match(
           /<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/
         );
         if (match) {
           const nd = JSON.parse(match[1]);
-          adJson = nd?.props?.pageProps?.ad;
+          parsed = nd?.props?.pageProps?.ad;
         }
-        if (!adJson) {
-          throw new Error(
-            "Données invalides. Collez le JSON copié depuis la console du navigateur (voir instructions)."
-          );
+      }
+
+      if (parsed) {
+        // Check all known formats
+        if (parsed?.props?.pageProps?.ad) {
+          adJson = parsed.props.pageProps.ad;
+        } else if (parsed?.subject || parsed?.attributes || parsed?._fromDom) {
+          adJson = parsed;
+        } else if (parsed?.["@type"]) {
+          // JSON-LD format
+          adJson = {
+            subject: parsed.name || "",
+            body: parsed.description || "",
+            price: parsed.offers?.price ? [Number(parsed.offers.price)] : [],
+            images: { urls_large: parsed.image ? (Array.isArray(parsed.image) ? parsed.image : [parsed.image]) : [] },
+            attributes: [],
+          };
+        } else if (parsed?.price || parsed?.images) {
+          // Generic ad-like object
+          adJson = parsed;
         }
+      }
+
+      if (!adJson) {
+        throw new Error(
+          "Données invalides. Utilisez l'extension Chrome ou la commande console pour copier les données."
+        );
       }
 
       const { data, imageUrls: lbcImageUrls } = parseAdJson(adJson);
