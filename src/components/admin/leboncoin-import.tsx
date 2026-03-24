@@ -2,14 +2,12 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Loader2,
   Download,
-  LinkIcon,
   AlertCircle,
   CheckCircle2,
   ClipboardPaste,
@@ -95,51 +93,22 @@ function parseAdJson(ad: any): { data: ImportedVehicleData; imageUrls: string[] 
   };
 }
 
-// ─── Bookmarklet script (user runs in browser console on lbc page) ──
+// ─── Bookmarklet: one click on Leboncoin page copies the ad data ────
 
 const CONSOLE_SCRIPT = `copy(JSON.stringify(__NEXT_DATA__.props.pageProps.ad))`;
+
+const BOOKMARKLET_CODE = `javascript:void(function(){try{var d=__NEXT_DATA__.props.pageProps.ad;if(!d){alert('Aucune annonce trouvée sur cette page.');return;}var j=JSON.stringify(d);navigator.clipboard.writeText(j).then(function(){alert('Données copiées ! Retournez sur TM AUTO et collez (Ctrl+V).');}).catch(function(){prompt('Copiez manuellement (Ctrl+A puis Ctrl+C):',j);});}catch(e){alert('Ouvrez cette page sur une annonce Leboncoin.');}})()`;
 
 interface LeboncoinImportProps {
   onImport: (data: ImportedVehicleData, imageUrls: string[]) => void;
 }
 
 export default function LeboncoinImport({ onImport }: LeboncoinImportProps) {
-  const [mode, setMode] = useState<"url" | "paste">("url");
-  const [url, setUrl] = useState("");
   const [pastedJson, setPastedJson] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
   const [copied, setCopied] = useState(false);
-
-  // ── URL import (server-side, may fail due to Cloudflare) ─────────
-  async function handleUrlImport() {
-    if (!url.trim()) return;
-    setLoading(true);
-    setError("");
-    setSuccess(false);
-
-    try {
-      const res = await fetch("/api/admin/import-leboncoin", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: url.trim() }),
-      });
-      const result = await res.json();
-      if (!res.ok) throw new Error(result.error || "Erreur lors de l'import");
-
-      setSuccess(true);
-      onImport(result.data, result.imageUrls || []);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Erreur";
-      setError(
-        `${msg}\n\nUtilisez la méthode "Coller les données" ci-dessous comme alternative.`
-      );
-      setMode("paste");
-    } finally {
-      setLoading(false);
-    }
-  }
 
   // ── Paste import (client-side parsing, then server for images) ───
   async function handlePasteImport() {
@@ -215,138 +184,96 @@ export default function LeboncoinImport({ onImport }: LeboncoinImportProps) {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* Mode tabs */}
-        <div className="flex gap-1 bg-blue-100/60 p-1 rounded-lg">
-          <button
-            type="button"
-            onClick={() => { setMode("url"); setError(""); setSuccess(false); }}
-            className={`flex-1 text-sm py-1.5 px-3 rounded-md transition-colors ${
-              mode === "url"
-                ? "bg-white shadow-sm font-medium text-blue-700"
-                : "text-muted-foreground hover:text-blue-600"
-            }`}
-          >
-            <LinkIcon className="h-3.5 w-3.5 inline mr-1.5" />
-            URL automatique
-          </button>
-          <button
-            type="button"
-            onClick={() => { setMode("paste"); setError(""); setSuccess(false); }}
-            className={`flex-1 text-sm py-1.5 px-3 rounded-md transition-colors ${
-              mode === "paste"
-                ? "bg-white shadow-sm font-medium text-blue-700"
-                : "text-muted-foreground hover:text-blue-600"
-            }`}
-          >
-            <ClipboardPaste className="h-3.5 w-3.5 inline mr-1.5" />
-            Coller les données
-          </button>
+        {/* ── Method 1: Bookmarklet (easiest) ─────────────────── */}
+        <div className="bg-white border rounded-lg p-4 space-y-3">
+          <p className="text-sm font-semibold flex items-center gap-2">
+            <span className="bg-blue-600 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">1</span>
+            Méthode rapide — Glissez ce bouton dans votre barre de favoris :
+          </p>
+          <div className="flex items-center gap-3">
+            {/* eslint-disable-next-line jsx-a11y/anchor-is-valid */}
+            <a
+              href={BOOKMARKLET_CODE}
+              onClick={(e) => e.preventDefault()}
+              draggable
+              className="inline-flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white font-medium text-sm px-4 py-2 rounded-lg cursor-grab active:cursor-grabbing shadow-sm select-none"
+              title="Glissez-moi dans votre barre de favoris !"
+            >
+              <Download className="h-4 w-4" />
+              📋 Copier annonce LBC
+            </a>
+            <span className="text-xs text-muted-foreground">← Glissez vers votre barre de favoris</span>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Ensuite, sur une page Leboncoin, cliquez sur ce favori → les données sont copiées → revenez ici et collez.
+          </p>
         </div>
 
-        {/* ── URL mode ──────────────────────────────────────────── */}
-        {mode === "url" && (
-          <>
-            <p className="text-sm text-muted-foreground">
-              Collez l&apos;URL d&apos;une annonce Leboncoin pour pré-remplir le formulaire.
-            </p>
-            <div className="flex gap-2 items-end">
-              <div className="flex-1">
-                <Label htmlFor="lbc-url" className="sr-only">URL Leboncoin</Label>
-                <div className="relative">
-                  <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="lbc-url"
-                    value={url}
-                    onChange={(e) => setUrl(e.target.value)}
-                    placeholder="https://www.leboncoin.fr/ad/voitures/..."
-                    className="pl-9 bg-white"
-                    disabled={loading}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") { e.preventDefault(); handleUrlImport(); }
-                    }}
-                  />
+        {/* ── Method 2: Console command (alternative) ─────────── */}
+        <details className="bg-white border rounded-lg">
+          <summary className="p-4 cursor-pointer text-sm font-semibold flex items-center gap-2">
+            <span className="bg-gray-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">2</span>
+            Méthode alternative — Commande console
+          </summary>
+          <div className="px-4 pb-4 space-y-2">
+            <ol className="text-sm text-muted-foreground space-y-1.5 list-decimal list-inside">
+              <li>Ouvrez l&apos;annonce Leboncoin</li>
+              <li>Appuyez sur <kbd className="px-1.5 py-0.5 bg-gray-100 border rounded text-xs font-mono">F12</kbd> → onglet <strong>Console</strong></li>
+              <li className="flex flex-col gap-1.5">
+                <span>Collez cette commande et appuyez sur Entrée :</span>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 text-xs bg-gray-900 text-green-400 px-3 py-2 rounded font-mono select-all">
+                    {CONSOLE_SCRIPT}
+                  </code>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={copyScript}
+                    className="shrink-0"
+                  >
+                    {copied ? (
+                      <><CheckCircle2 className="h-3.5 w-3.5 mr-1 text-green-600" />Copié !</>
+                    ) : (
+                      <><Copy className="h-3.5 w-3.5 mr-1" />Copier</>
+                    )}
+                  </Button>
                 </div>
-              </div>
-              <Button type="button" onClick={handleUrlImport} disabled={loading || !url.trim()}>
-                {loading ? (
-                  <><Loader2 className="h-4 w-4 animate-spin mr-2" />Import...</>
-                ) : (
-                  <><Download className="h-4 w-4 mr-2" />Importer</>
-                )}
-              </Button>
-            </div>
-          </>
-        )}
+              </li>
+              <li>Revenez ici et collez le résultat ci-dessous</li>
+            </ol>
+          </div>
+        </details>
 
-        {/* ── Paste mode ────────────────────────────────────────── */}
-        {mode === "paste" && (
-          <>
-            <div className="bg-white border rounded-lg p-4 space-y-3">
-              <p className="text-sm font-medium">Comment faire :</p>
-              <ol className="text-sm text-muted-foreground space-y-2 list-decimal list-inside">
-                <li>
-                  Ouvrez l&apos;annonce Leboncoin dans votre navigateur
-                </li>
-                <li>
-                  Appuyez sur <kbd className="px-1.5 py-0.5 bg-gray-100 border rounded text-xs font-mono">F12</kbd> pour ouvrir les outils développeur
-                </li>
-                <li>
-                  Cliquez sur l&apos;onglet <strong>Console</strong>
-                </li>
-                <li className="flex flex-col gap-1.5">
-                  <span>Collez cette commande et appuyez sur Entrée :</span>
-                  <div className="flex items-center gap-2">
-                    <code className="flex-1 text-xs bg-gray-900 text-green-400 px-3 py-2 rounded font-mono select-all">
-                      {CONSOLE_SCRIPT}
-                    </code>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={copyScript}
-                      className="shrink-0"
-                    >
-                      {copied ? (
-                        <><CheckCircle2 className="h-3.5 w-3.5 mr-1 text-green-600" />Copié !</>
-                      ) : (
-                        <><Copy className="h-3.5 w-3.5 mr-1" />Copier</>
-                      )}
-                    </Button>
-                  </div>
-                </li>
-                <li>
-                  Revenez ici et collez le résultat (<kbd className="px-1.5 py-0.5 bg-gray-100 border rounded text-xs font-mono">Ctrl+V</kbd>) dans le champ ci-dessous
-                </li>
-              </ol>
-            </div>
+        {/* ── Paste area ────────────────────────────────────────── */}
+        <div>
+          <Label htmlFor="lbc-json" className="flex items-center gap-2">
+            <span className="bg-blue-600 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">→</span>
+            Collez les données ici (Ctrl+V)
+          </Label>
+          <Textarea
+            id="lbc-json"
+            value={pastedJson}
+            onChange={(e) => setPastedJson(e.target.value)}
+            placeholder='Collez ici le JSON copié depuis Leboncoin...'
+            rows={5}
+            className="mt-1 bg-white font-mono text-xs"
+            disabled={loading}
+          />
+        </div>
 
-            <div>
-              <Label htmlFor="lbc-json">Données JSON de l&apos;annonce</Label>
-              <Textarea
-                id="lbc-json"
-                value={pastedJson}
-                onChange={(e) => setPastedJson(e.target.value)}
-                placeholder='{"subject":"Peugeot 308 ...","attributes":[...],...}'
-                rows={5}
-                className="mt-1 bg-white font-mono text-xs"
-                disabled={loading}
-              />
-            </div>
-
-            <Button
-              type="button"
-              onClick={handlePasteImport}
-              disabled={loading || !pastedJson.trim()}
-              className="w-full"
-            >
-              {loading ? (
-                <><Loader2 className="h-4 w-4 animate-spin mr-2" />Traitement...</>
-              ) : (
-                <><ClipboardPaste className="h-4 w-4 mr-2" />Importer les données</>
-              )}
-            </Button>
-          </>
-        )}
+        <Button
+          type="button"
+          onClick={handlePasteImport}
+          disabled={loading || !pastedJson.trim()}
+          className="w-full"
+        >
+          {loading ? (
+            <><Loader2 className="h-4 w-4 animate-spin mr-2" />Traitement...</>
+          ) : (
+            <><ClipboardPaste className="h-4 w-4 mr-2" />Importer les données</>
+          )}
+        </Button>
 
         {/* ── Messages ──────────────────────────────────────────── */}
         {error && (
